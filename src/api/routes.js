@@ -1,5 +1,6 @@
+// src/api/routes.js
 import { Router } from 'express';
-import { runViosProcessosJob } from '../jobs/viosProcessosJob.js'; // ajuste o path se sua estrutura for diferente
+import { runViosProcessosJob } from '../jobs/viosProcessosJob.js';
 
 // Armazenamento simples em memória para logs
 const jobLogs = new Map();
@@ -12,12 +13,12 @@ function appendJobLog(jobId, line) {
 export function buildRouter() {
   const router = Router();
 
-  // Health
+  // Health interno (opcional - já existe /health na raiz)
   router.get('/health', (req, res) => {
     res.json({ ok: true, ts: Date.now() });
   });
 
-  // Executa o job real
+  // Executa job (rota duplicada com /api/run já existente, use só se precisar)
   router.post('/job/run', async (req, res) => {
     const payload = req.body || {};
     const { format } = req.query;
@@ -41,12 +42,12 @@ export function buildRouter() {
         const sep = ';';
         const linhas = [
           result.headers.join(sep),
-          ...result.data.map(row =>
-            result.headers.map(h => {
-              const val = (row[h] ?? '').toString().replace(/"/g,'""');
-              return /[;"\n]/.test(val) ? `"${val}"` : val;
-            }).join(sep)
-          )
+            ...result.data.map(row =>
+              result.headers.map(h => {
+                const val = (row[h] ?? '').toString().replace(/"/g,'""');
+                return /[;"\n]/.test(val) ? `"${val}"` : val;
+              }).join(sep)
+            )
         ];
         res.setHeader('Content-Type','text/csv; charset=utf-8');
         res.setHeader('X-Job-Id', jobId);
@@ -59,7 +60,7 @@ export function buildRouter() {
     }
   });
 
-  // Logs da execução
+  // Logs
   router.get('/job/logs/:jobId', (req, res) => {
     const { jobId } = req.params;
     res.json({
@@ -69,10 +70,12 @@ export function buildRouter() {
     });
   });
 
-  // (Opcional) Status simples (placeholder)
+  // Status simples
   router.get('/job/status', (req, res) => {
     res.json({ ok:true, ultimoJobIds: Array.from(jobLogs.keys()).slice(-5) });
   });
 
   return router;
 }
+
+export default buildRouter;

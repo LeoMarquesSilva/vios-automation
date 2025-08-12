@@ -6,13 +6,38 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
-import { buildRouter } from './api/routes.js'; // opcional
+import { buildRouter } from './api/routes.js';
 import { runViosProcessosJob } from './jobs/viosProcessosJob.js';
 import { readHistory } from './core/history.js';
 import { jobStore } from './jobs/store.js'; // Map: jobId -> { status, ... }
 
 const app = express();
 app.set('trust proxy', true);
+
+// ================== CORS (ANTES DE TUDO) ==================
+const ALLOWED_ORIGINS = [
+  'https://www.bismarchipires.com.br'
+  // adicione outras origens se necessário
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,x-api-key');
+  res.setHeader('Access-Control-Max-Age', '600');
+  // Se for usar cookies/credenciais, descomente:
+  // res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
+// ==========================================================
 
 app.use(express.json({ limit: process.env.JSON_LIMIT || '500kb' }));
 app.use(morgan(process.env.MORGAN_FORMAT || 'dev'));
@@ -22,8 +47,9 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, status: 'up', service: 'vios-automation', ts: new Date().toISOString() });
 });
 
-// ---------- Middleware API Key (tudo abaixo exige x-api-key se API_KEY existir) ----------
+// ---------- Middleware API Key (IGNORA OPTIONS) ----------
 app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') return next();
   if (process.env.API_KEY) {
     const key = req.headers['x-api-key'];
     if (key !== process.env.API_KEY) {
@@ -33,7 +59,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ---------- Rotas existentes /api (se houver buildRouter) ----------
+// ---------- Rotas /api adicionais (se houver) ----------
 if (buildRouter) {
   app.use('/api', buildRouter());
 }
@@ -42,7 +68,7 @@ if (buildRouter) {
 // CONFIG DE JOBS ASSÍNCRONOS
 // =========================================================
 const MAX_CONCURRENT_JOBS = parseInt(process.env.MAX_CONCURRENT_JOBS || '1', 10);
-const RETENTION_MINUTES = parseInt(process.env.RETENTION_MINUTES || '120', 10); // tempo que mantém jobs finalizados
+const RETENTION_MINUTES = parseInt(process.env.RETENTION_MINUTES || '120', 10);
 let activeJobs = 0;
 
 function genId() {
@@ -62,7 +88,6 @@ function launchJob(jobId) {
 
   (async () => {
     try {
-      // Aqui você pode adaptar os parâmetros conforme o body enviado no POST /api/run-async
       const mode = job.payload?.mode || 'LAST_FULL_WEEK';
       const result = await runViosProcessosJob(
         { dateRangeMode: mode },
@@ -81,7 +106,6 @@ function launchJob(jobId) {
     } finally {
       if (!job.finishedAt) job.finishedAt = nowISO();
       activeJobs--;
-      // Tenta iniciar próximo da fila
       scheduleNext();
     }
   })();
@@ -97,7 +121,7 @@ function scheduleNext() {
   }
 }
 
-// Limpeza periódica de jobs finalizados
+// Limpeza periódica
 setInterval(() => {
   const cutoff = Date.now() - RETENTION_MINUTES * 60 * 1000;
   let removed = 0;
@@ -116,8 +140,7 @@ setInterval(() => {
 }, 60 * 1000).unref();
 
 // =========================================================
-// ENDPOINT ASSÍNCRONO: cria job e retorna imediatamente
-// POST /api/run-async { "mode": "LAST_FULL_WEEK" }
+// POST /api/run-async (assíncrono)
 // =========================================================
 app.post('/api/run-async', (req, res) => {
   const mode = (req.body && req.body.mode) || 'LAST_FULL_WEEK';
@@ -129,7 +152,6 @@ app.post('/api/run-async', (req, res) => {
     payload: { mode }
   });
 
-  // Inicia se houver slot
   scheduleNext();
 
   res.status(202).json({
@@ -143,7 +165,6 @@ app.post('/api/run-async', (req, res) => {
 });
 
 // =========================================================
-// ENDPOINT STATUS DO JOB
 // GET /api/jobs/:id
 // =========================================================
 app.get('/api/jobs/:id', (req, res) => {
@@ -164,8 +185,9 @@ app.get('/api/jobs/:id', (req, res) => {
   });
 });
 
-// (Opcional) listar jobs recentes
-// GET /api/jobs?limit=20&status=done
+// =========================================================
+// GET /api/jobs (lista)
+// =========================================================
 app.get('/api/jobs', (req, res) => {
   const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
   const statusFilter = req.query.status;
@@ -180,14 +202,13 @@ app.get('/api/jobs', (req, res) => {
       finishedAt: job.finishedAt
     });
   }
-  // Ordena por criação desc
   entries.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  res.json({ ok: true, count: entries.slice(0, limit).length, items: entries.slice(0, limit) });
+  const sliced = entries.slice(0, limit);
+  res.json({ ok: true, count: sliced.length, items: sliced });
 });
 
 // =========================================================
-// ENDPOINT SÍNCRONO EXISTENTE (mantido)
-// POST /api/run
+// POST /api/run (síncrono)
 // =========================================================
 app.post('/api/run', async (req, res) => {
   const mode = (req.body && req.body.mode) || 'LAST_FULL_WEEK';
@@ -203,7 +224,9 @@ app.post('/api/run', async (req, res) => {
   }
 });
 
-// Histórico (existente)
+// =========================================================
+// GET /api/history
+// =========================================================
 app.get('/api/history', (req, res) => {
   const limit = parseInt(req.query.limit, 10) || 100;
   const history = readHistory({ limit });
