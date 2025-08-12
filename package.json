@@ -2,7 +2,9 @@
   "name": "vios-automation",
   "version": "1.0.0",
   "type": "module",
-  "engines": { "node": "20.x" },
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
@@ -10,7 +12,9 @@
     "cron:semanal": "node scripts/runProcessosSemanal.js",
     "cron:ultimos7": "node scripts/runProcessosUltimos7.js",
     "run:processos": "node scripts/runProcessos.js",
-    "manual": "node scripts/runProcessosManual.js LAST_FULL_WEEK"
+    "manual": "node scripts/runProcessosManual.js LAST_FULL_WEEK",
+    "postinstall": "npx playwright install --with-deps chromium",
+    "pw:doctor": "npx playwright doctor"
   },
   "dependencies": {
     "cheerio": "^1.1.2",
