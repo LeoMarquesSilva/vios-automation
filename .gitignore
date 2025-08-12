@@ -25,3 +25,4 @@ Thumbs.db
 
 # Cache (se houver)
 .cache/
+"reports/" 
