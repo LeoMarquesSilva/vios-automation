@@ -1,0 +1,27 @@
+# Dependências
+node_modules/
+
+# Ambiente
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# Reports / saídas geradas
+reports/
+playwright-report/
+test-results/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Cache (se houver)
+.cache/

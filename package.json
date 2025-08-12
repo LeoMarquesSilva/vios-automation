@@ -1,0 +1,25 @@
+{
+  "name": "vios-automation",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "job:processos": "node src/jobs/viosProcessosJob.js",
+    "cron:semanal": "node scripts/runProcessosSemanal.js",
+    "cron:ultimos7": "node scripts/runProcessosUltimos7.js",
+    "run:processos": "node scripts/runProcessos.js",
+    "manual": "node scripts/runProcessosManual.js LAST_FULL_WEEK"
+  },
+  "dependencies": {
+    "cheerio": "^1.1.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "morgan": "^1.10.0",
+    "playwright": "^1.45.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
